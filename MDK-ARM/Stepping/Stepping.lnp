@@ -1,0 +1,23 @@
+--cpu Cortex-M3
+"stepping\startup_stm32f103xb.o"
+"stepping\main.o"
+"stepping\stm32f1xx_it.o"
+"stepping\stm32f1xx_hal_msp.o"
+"stepping\stm32f1xx_hal_gpio_ex.o"
+"stepping\stm32f1xx_hal_tim.o"
+"stepping\stm32f1xx_hal_tim_ex.o"
+"stepping\stm32f1xx_hal_uart.o"
+"stepping\stm32f1xx_hal.o"
+"stepping\stm32f1xx_hal_rcc.o"
+"stepping\stm32f1xx_hal_rcc_ex.o"
+"stepping\stm32f1xx_hal_gpio.o"
+"stepping\stm32f1xx_hal_dma.o"
+"stepping\stm32f1xx_hal_cortex.o"
+"stepping\stm32f1xx_hal_pwr.o"
+"stepping\stm32f1xx_hal_flash.o"
+"stepping\stm32f1xx_hal_flash_ex.o"
+"stepping\system_stm32f1xx.o"
+--library_type=microlib --strict --scatter "Stepping\Stepping.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "Stepping.map" -o Stepping\Stepping.axf
