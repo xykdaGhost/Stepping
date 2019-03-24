@@ -1,6 +1,0 @@
---c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F1xx_HAL_Driver/Inc -I ../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I ../Drivers/CMSIS/Include
--I.\RTE\_Stepping
--IC:\Users\yikai\AppData\Local\Arm\Packs\ARM\CMSIS\5.5.1\CMSIS\Core\Include
--IC:\Users\yikai\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.3.0\Device\Include
--D__UVISION_VERSION="527" -D_RTE_ -DSTM32F10X_MD -DUSE_HAL_DRIVER -DSTM32F103xB
--o stepping\main.o --omf_browse stepping\main.crf --depend stepping\main.d "../Src/main.c"

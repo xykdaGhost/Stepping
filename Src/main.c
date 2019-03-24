@@ -86,10 +86,11 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint8_t rxBuffer[22];
-uint8_t SETTING_GYROSCOPE[] = {0xff, 0xaa, 0x02, 0x08, 0x00};
+uint8_t SETTING_GYROSCOPE[] = {0xff, 0xaa, 0x04, 0x09, 0x00};
 
 float xRoll, xGoal;
 float zYaw, zGoal;
+float yPitch, yGoal;
 
 /* USER CODE END 0 */
 
@@ -100,9 +101,7 @@ float zYaw, zGoal;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	HAL_UART_Receive_DMA(&huart1, rxBuffer, sizeof(rxBuffer));
-	HAL_UART_Transmit_DMA(&huart1, SETTING_GYROSCOPE, sizeof(SETTING_GYROSCOPE));
-	
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -127,28 +126,31 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+	HAL_UART_Transmit_DMA(&huart1, SETTING_GYROSCOPE, sizeof(SETTING_GYROSCOPE));
+	HAL_UART_Receive_DMA(&huart1, rxBuffer, sizeof(rxBuffer));
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1)
+	{
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		while (!((-0.2f < (xGoal - xRoll)) && ((xGoal - xRoll) < 0))) {
+		
+		while (!((-0.2f < (zGoal - zYaw)) && ((zGoal - zYaw) < 0))) {
 			pulseOutput(GPIOB, GPIO_PIN_10);
 		}
-		while (!((0 < (xGoal - xRoll)) && ((xGoal - xRoll) < 0.2f))) {
+		while (!((0 < (zGoal - zYaw)) && ((zGoal - zYaw) < 0.2f))) {
 			pulseOutput(GPIOB, GPIO_PIN_11);
 		}
-		while (!((-0.2f < (zGoal - zYaw)) && ((zGoal - zYaw) < 0))) {
+		while (!((-0.2f < (xGoal - xRoll)) && ((xGoal - xRoll) < 0))) {
 			pulseOutput(GPIOB, GPIO_PIN_12);			
 		}
 		while (!((0 < (xGoal - xRoll)) && ((xGoal - xRoll) < 0.2f))) {
 			pulseOutput(GPIOB, GPIO_PIN_13);
 		}
+	}	
   /* USER CODE END 3 */
 }
 
@@ -161,7 +163,7 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /**Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
@@ -174,7 +176,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /**Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
@@ -204,7 +206,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 921600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -270,10 +272,10 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
   /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
   /* DMA1_Channel7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
 
 }
@@ -309,16 +311,22 @@ static void MX_GPIO_Init(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	char cnt = 0;
 	while ((rxBuffer[cnt+1] == 0x53) && (rxBuffer[cnt++] == 0x55)) {
-		xRoll = (rxBuffer[cnt+2]<<8 | rxBuffer[cnt+1] /32768*180);
-		zYaw = (rxBuffer[cnt+6]<<8 | rxBuffer[cnt+5] /32768*180);
+		xRoll = ((float)(rxBuffer[cnt+2]<<8|rxBuffer[cnt+1]) /32768*180);
+		if (xRoll > 180) {
+			xRoll -= 360.0f;
+		}		
+		zYaw = ((float)(rxBuffer[cnt+6]<<8|rxBuffer[cnt+5]) /32768*180);
+		zYaw -= 280.0f;
 	}
 }
 
 void pulseOutput(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin) {
 	HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-	int i = 200;
+	int i = 20;
 	while (i--);
 	HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
+	i = 2000;
+	while (i--);
 }
 
 /* USER CODE END 4 */
