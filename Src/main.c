@@ -40,6 +40,11 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "dma.h"
+#include "tim.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -62,12 +67,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart1_rx;
-DMA_HandleTypeDef hdma_usart1_tx;
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 
@@ -75,10 +74,6 @@ DMA_HandleTypeDef hdma_usart2_tx;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -86,11 +81,23 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint8_t rxBuffer[22];
-uint8_t SETTING_GYROSCOPE[] = {0xff, 0xaa, 0x04, 0x09, 0x00};
+uint8_t SETTING_GYROSCOPE[] = {0xff, 0xaa, 0x02, 0x08, 0x00, 0xff, 0xaa, 0x03, 0x0a, 0x00};
 
-float xRoll, xGoal;
-float zYaw, zGoal;
+float xRoll, xGoal;  //x为上�?
+float zYaw, zGoal;    //z为左�?
 float yPitch, yGoal;
+
+int dirction;
+uint16_t motor;
+
+float xdata[600];
+
+
+int pulseCnt = 15;
+int cnt_2323 = 15500;
+int cnt_2 = 0;
+int stepCnt = 0;
+int xStep, zStep;
 
 /* USER CODE END 0 */
 
@@ -115,6 +122,7 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
+	
 
   /* USER CODE BEGIN SysInit */
 
@@ -125,31 +133,81 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-	HAL_UART_Transmit_DMA(&huart1, SETTING_GYROSCOPE, sizeof(SETTING_GYROSCOPE));
-	HAL_UART_Receive_DMA(&huart1, rxBuffer, sizeof(rxBuffer));
+	//HAL_UART_Transmit_DMA(&huart2, SETTING_GYROSCOPE, sizeof(SETTING_GYROSCOPE));
+	HAL_UART_Receive_DMA(&huart2, rxBuffer, sizeof(rxBuffer));
+	HAL_TIM_Base_Start_IT(&htim3);
+	HAL_Delay(1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
+		//拨码1-8 00010110 dir = 0顺时�?
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+		if (stepCnt == 0) {
+			xStep = (int) ((xGoal - xRoll) / DEGREE);
+			xdata[0] = xStep; 
+			zStep = (int) ((zGoal - zYaw) / DEGREE);
+			stepCnt++;
+		}
+
+		if (stepCnt == 1) {
+			if (xStep < 0) {
+				cnt_2323 = -xStep;
+				while (cnt_2323 != 0) {
+					pulseOutputXrollClockwise();
+				}
+				
+			} else if (xStep > 0) {
+				cnt_2323 = xStep;
+				while (cnt_2323 != 0) {
+					pulseOutputXrollCounterClockwise();	
+				}
+				
+				if (xGoal - xRoll > 0.2f) { 
+					while (xGoal - xRoll > 0.2f) {
+						pulseCnt = 16;
+						while (pulseCnt > 1 )
+							pulseOutputXrollCounterClockwise();
+						HAL_Delay(5);
+					}
+				}	
+				
+				if (xGoal - xRoll < -0.2f) {
+					while (xGoal - xRoll < -0.2f) {
+						pulseCnt = 16;
+						while (pulseCnt > 1 )
+							pulseOutputXrollClockwise();
+						HAL_Delay(5);
+					}
+				}	
+			}
+			stepCnt++;
+		}
 		
-		while (!((-0.2f < (zGoal - zYaw)) && ((zGoal - zYaw) < 0))) {
-			pulseOutput(GPIOB, GPIO_PIN_10);
+		if (stepCnt == 2) {
+			if (zStep < 0) {
+				cnt_2323 = -zStep;
+				while (cnt_2323 != 0) {
+					pulseOutputZyawCounterClockwise();
+				}
+			} else if (zStep > 0) {
+				cnt_2323 = zStep;
+				while (cnt_2323 != 0) {
+					pulseOutputZyawClockwise();
+				}
+			}
+			stepCnt ++;
 		}
-		while (!((0 < (zGoal - zYaw)) && ((zGoal - zYaw) < 0.2f))) {
-			pulseOutput(GPIOB, GPIO_PIN_11);
-		}
-		while (!((-0.2f < (xGoal - xRoll)) && ((xGoal - xRoll) < 0))) {
-			pulseOutput(GPIOB, GPIO_PIN_12);			
-		}
-		while (!((0 < (xGoal - xRoll)) && ((xGoal - xRoll) < 0.2f))) {
-			pulseOutput(GPIOB, GPIO_PIN_13);
-		}
+			
+		
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13, GPIO_PIN_RESET);
 	}	
   /* USER CODE END 3 */
 }
@@ -162,6 +220,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the CPU, AHB and APB busses clocks 
   */
@@ -189,144 +248,80 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 921600;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
-  /* DMA1_Channel5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
-  /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PB10 PB11 PB12 PB13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
 }
 
 /* USER CODE BEGIN 4 */
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	char cnt = 0;
-	while ((rxBuffer[cnt+1] == 0x53) && (rxBuffer[cnt++] == 0x55)) {
-		xRoll = ((float)(rxBuffer[cnt+2]<<8|rxBuffer[cnt+1]) /32768*180);
-		if (xRoll > 180) {
-			xRoll -= 360.0f;
-		}		
-		zYaw = ((float)(rxBuffer[cnt+6]<<8|rxBuffer[cnt+5]) /32768*180);
-		zYaw -= 280.0f;
+	while ((rxBuffer[cnt+1] != 0x53) || (rxBuffer[cnt++] != 0x55)) {
+		cnt++;
 	}
+	xRoll = ((float)(rxBuffer[cnt+2]<<8|rxBuffer[cnt+1]) /32768*180);
+	if (xRoll > 180) {
+		xRoll -= 360.0f;
+	}		
+	zYaw = ((float)(rxBuffer[cnt+6]<<8|rxBuffer[cnt+5]) /32768*180);
+	zYaw -= 280.0f;
+	
+	xdata[cnt_2++] = xRoll;
 }
 
-void pulseOutput(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin) {
-	HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_SET);
-	int i = 20;
-	while (i--);
-	HAL_GPIO_WritePin(GPIOx, GPIO_Pin, GPIO_PIN_RESET);
-	i = 2000;
-	while (i--);
+void pulseOutputXrollClockwise() {
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET);
+	if (pulseCnt == 15) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+		cnt_2323--;
+	} else if(pulseCnt == 12) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+	}	
+}
+
+void pulseOutputXrollCounterClockwise() {
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
+	if (pulseCnt == 15) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+		cnt_2323--;
+	} else if(pulseCnt == 12) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+	}
+}
+	
+void pulseOutputZyawClockwise() {
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
+	if (pulseCnt == 15) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+		cnt_2323--;
+	} else if(pulseCnt == 12) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+	}	
+}
+	
+void pulseOutputZyawCounterClockwise() {
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
+	if (pulseCnt == 15) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+		cnt_2323--;
+	} else if(pulseCnt == 12) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+	}		
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	
+	if (htim == &htim3) {
+		if(pulseCnt == 0) {
+			pulseCnt = 16;
+		}
+		pulseCnt--;
+	} 
+
 }
 
 /* USER CODE END 4 */

@@ -74,12 +74,17 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void pulseOutput(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+
+void pulseOutputXrollClockwise(void);
+void pulseOutputXrollCounterClockwise(void);
+void pulseOutputZyawClockwise(void);
+void pulseOutputZyawCounterClockwise(void);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
 /* USER CODE BEGIN Private defines */
-
+#define DEGREE 0.001589934565219f
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
